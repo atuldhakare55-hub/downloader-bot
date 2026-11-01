@@ -239,7 +239,7 @@ async def start_web_server():
     server.router.add_get("/", handle_ping)
     runner = web.AppRunner(server)
     await runner.setup()
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
@@ -247,7 +247,10 @@ async def main():
     await start_web_server()
     await app.start()
     print("Bot is Started Successfully!")
-    await asyncio.Event().wait()
+    from pyrogram import idle
+    await idle()
+    await app.stop()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+        loop.run_until_complete(main())
+    
