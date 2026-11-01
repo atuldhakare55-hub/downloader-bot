@@ -201,7 +201,7 @@ async def cb_handler(client, query):
     elif query.data == "back_home":
         await query.message.delete()
 
-# ================= Terabox Link Processing =================
+# ================= Terabox Link Processing (Fallback APIs) =================
 @app.on_message(filters.regex(r"https?://[^\s]+") & filters.private)
 async def process_video(client, message):
     user_id = message.from_user.id
@@ -219,7 +219,6 @@ async def process_video(client, message):
         bot_uname = (await client.get_me()).username
         step2_link = f"https://t.me/{bot_uname}?start=verify2_{user_id}"
         
-        # Single ya Double shortener handling
         if s2_site and s2_api and s2_site != s1_site and s2_site != 'none':
             s2_short = await shorten_url(step2_link, s2_site, s2_api)
             final_short = await shorten_url(s2_short, s1_site, s1_api)
@@ -235,21 +234,38 @@ async def process_video(client, message):
 
     status = await message.reply_text("🔄 Processing link...")
     url = message.text.strip()
-    try:
-        api_url = f"https://terabox-api.graydeveloper.com/api?url={url}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=15) as resp:
-                data = await resp.json()
-                if data and ("direct_link" in str(data) or "download_link" in str(data)):
-                    dl = data.get("direct_link") or data.get("download_link")
-                    title = data.get("title", "Terabox Video")
-                    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Direct Download", url=dl)]])
-                    await status.delete()
-                    await message.reply_text(f"🎬 `{title}`\n\n✅ Link ready hai:", reply_markup=kb)
-                else:
-                    await status.edit_text("❌ Direct link fetch nahi ho saka. Link check karein.")
-    except Exception as e:
-        await status.edit_text(f"⚠️ Error: `{str(e)}`")
+
+    api_list = [
+        f"https://teraboxvideodownloader.nepcoderdevs.workers.dev/?url={url}",
+        f"https://terabox-api.hf.space/api?url={url}"
+    ]
+
+    dl_link = None
+    file_title = "Terabox Video"
+
+    async with aiohttp.ClientSession() as session:
+        for api_url in api_list:
+            try:
+                async with session.get(api_url, timeout=12) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if isinstance(data, dict):
+                            dl_link = data.get("download_link") or data.get("direct_link") or data.get("url")
+                            file_title = data.get("title") or data.get("file_name") or file_title
+                        elif isinstance(data, list) and len(data) > 0:
+                            dl_link = data[0].get("download_link") or data[0].get("url")
+                        
+                        if dl_link:
+                            break
+            except Exception:
+                continue
+
+    if dl_link:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Direct Download", url=dl_link)]])
+        await status.delete()
+        await message.reply_text(f"🎬 `{file_title}`\n\n✅ Link ready hai:", reply_markup=kb)
+    else:
+        await status.edit_text("❌ Abhi link extract nahi ho saka. Yeh link expired ya server busy ho sakta hai. Thodi der baad try karein.")
 
 # ================= Support Command =================
 @app.on_message(filters.command("support") & filters.private)
